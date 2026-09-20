@@ -1,0 +1,44 @@
+services:
+  # Live Meta webhooks receiver: Pages + WhatsApp + Instagram, plus the
+  # real-time dashboard at /dashboard. Render supplies PORT automatically;
+  # the server already listens on 0.0.0.0 and honors process.env.PORT.
+  - type: web
+    name: meta-webhooks-server
+    runtime: node
+    plan: free
+    healthCheckPath: /health
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      # Sync the Graph API version with src/config.js DEFAULT_GRAPH_VERSION.
+      - key: GRAPH_API_VERSION
+        value: v26.0
+      # JSON logs are easier to read in Render -> service -> Logs.
+      - key: LOG_JSON
+        value: 'true'
+      # PUBLIC_BASE_URL must equal the Render service URL (set after deploy).
+      # It is printed on startup and used for the exact Meta callback URLs.
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: WEBHOOK_VERIFY_TOKEN
+        generateValue: true
+      - key: DASHBOARD_TOKEN
+        generateValue: true
+      - key: PAGE_ID
+        sync: false
+      - key: PAGE_ACCESS_TOKEN
+        sync: false
+      - key: WABA_ID
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_SYSTEM_USER_TOKEN
+        sync: false
+      - key: INSTAGRAM_USER_ID
+        sync: false
+      - key: INSTAGRAM_ACCESS_TOKEN
+        sync: false

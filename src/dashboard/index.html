@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meta Webhooks — Live Dashboard</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #0b1020;
+    color: #e8ecf4;
+    min-height: 100vh;
+  }
+  header {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #2a3350;
+    background: #111832;
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 18px; margin: 0 12px 0 0; }
+  .status {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; padding: 4px 12px; border-radius: 999px;
+    background: #1c2440; border: 1px solid #2a3350;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #f59e0b; }
+  .dot.live { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-left: auto; font-size: 13px; }
+  .controls label { display: inline-flex; align-items: center; gap: 6px; opacity: .9; }
+  .controls select, .controls input[type="text"] {
+    background: #1c2440; color: inherit; border: 1px solid #2a3350;
+    border-radius: 8px; padding: 6px 10px; font-size: 13px;
+  }
+  .controls input[type="text"] { width: 130px; }
+  button {
+    background: #2563eb; color: #fff; border: 0; border-radius: 8px;
+    padding: 6px 14px; font-size: 13px; cursor: pointer;
+  }
+  button.secondary { background: #2a3350; }
+  button:hover { filter: brightness(1.15); }
+  main { padding: 16px 20px 60px; max-width: 1100px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .card {
+    background: #111832; border: 1px solid #2a3350; border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .card .value { font-size: 24px; font-weight: 700; }
+  .card .label { font-size: 12px; opacity: .7; text-transform: uppercase; letter-spacing: .06em; }
+  ul.feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  li.item {
+    background: #111832; border: 1px solid #2a3350; border-left-width: 4px;
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  li.item.pages { border-left-color: #1877f2; }
+  li.item.whatsapp { border-left-color: #25d366; }
+  li.item.instagram { border-left-color: #e1306c; }
+  li.item.server { border-left-color: #f59e0b; }
+  li.item .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin-bottom: 4px; }
+  .badge {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    padding: 2px 8px; border-radius: 999px; background: #2a3350;
+  }
+  .time { opacity: .55; font-size: 12px; margin-left: auto; }
+  .headline { font-weight: 600; }
+  .sub { opacity: .75; margin-top: 2px; word-break: break-word; }
+  pre {
+    margin: 8px 0 0; padding: 8px 10px; font-size: 12px; line-height: 1.5;
+    background: #0b1020; border: 1px solid #2a3350; border-radius: 8px;
+    overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  details summary { cursor: pointer; opacity: .7; font-size: 12px; margin-top: 6px; }
+  .hint { font-size: 13px; opacity: .65; margin: 0 0 14px; }
+  .hidden { display: none !important; }
+  #tokenBox { display: none; gap: 6px; align-items: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Meta Webhooks — Live</h1>
+  <span class="status"><span class="dot" id="dot"></span><span id="statusText">connecting…</span></span>
+  <div class="controls">
+    <label>Product
+      <select id="productFilter">
+        <option value="all">all</option>
+        <option value="pages">pages</option>
+        <option value="whatsapp">whatsapp</option>
+        <option value="instagram">instagram</option>
+        <option value="server">server</option>
+      </select>
+    </label>
+    <label>Type
+      <select id="typeFilter">
+        <option value="all">all</option>
+        <option value="webhook">webhook</option>
+        <option value="log">log</option>
+      </select>
+      <button id="notifyBtn" class="secondary" type="button">Enable alerts</button>
+    </label>
+    <span id="tokenBox">
+      <input type="text" id="tokenInput" placeholder="Dashboard token" autocomplete="off">
+    <button id="notifyBtn" class="secondary" type="button">Enable alerts</button>
+    <button id="notifyBtn" class="secondary" type="button">Enable alerts</button>
+      <button id="tokenSave" type="button">Use token</button>
+    </span>
+    <button id="notifyBtn" class="secondary" type="button">Enable alerts</button>
+    <button id="pauseBtn" class="secondary" type="button">Pause</button>
+    <button id="notifyBtn" class="secondary" type="button">Enable alerts</button>
+    <button id="clearBtn" class="secondary" type="button">Clear</button>
+  </div>
+</header>
+<main>
+  <div class="cards">
+    <div class="card"><div class="value" id="countTotal">0</div><div class="label">events shown</div></div>
+    <div class="card"><div class="value" id="countPages">0</div><div class="label">pages</div></div>
+    <div class="card"><div class="value" id="countWhatsapp">0</div><div class="label">whatsapp</div></div>
+    <div class="card"><div class="value" id="countInstagram">0</div><div class="label">instagram</div></div>
+  </div>
+  <p class="hint">
+    Every verified webhook delivery appears here within a second, newest first.
+    Full server logs stay available in Render → your service → <strong>Logs</strong>.
+  </p>
+  <ul class="feed" id="feed"></ul>
+</main>
+<script>
+(function () {
+  'use strict';
+  var feed = document.getElementById('feed');
+  var dot = document.getElementById('dot');
+  var statusText = document.getElementById('statusText');
+  var productFilter = document.getElementById('productFilter');
+  var typeFilter = document.getElementById('typeFilter');
+  var pauseBtn = document.getElementById('pauseBtn');
+  var clearBtn = document.getElementById('clearBtn');
+  var tokenBox = document.getElementById('tokenBox');
+  var tokenInput = document.getElementById('tokenInput');
+  var paused = false;
+  var notifyBtn = document.getElementById('notifyBtn');
+  var notifyBtn = document.getElementById('notifyBtn');
+  var audioCtx = null;
+  var notificationsOn = false;
+  var notificationsOn = false;
+  var audioCtx = null;
+  var notifyBtn = document.getElementById('notifyBtn');
+  var SOUND_ALERTS = true;
+  var notificationsOn = false;
+  var source = null;
+  var audioCtx = null;
+  var notificationsOn =
+    ('Notification' in window) && Notification.permission === 'granted';
+  var notifyBtn = document.getElementById('notifyBtn');
+  try {
+    if (notifyBtn && notificationsOn) notifyBtn.textContent = 'Alerts on';
+  } catch (e) {}
+  var counts = { total: 0, pages: 0, whatsapp: 0, instagram: 0 };
+  var params = new URLSearchParams(window.location.search);
+  var token = params.get('token') || sessionStorage.getItem('dashboardToken') || '';
+  // Short beep via WebAudio — no external sound file needed.
+  function beep() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      if (!audioCtx) audioCtx = new Ctx();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.35);
+    } catch (e) { /* audio is best-effort */ }
+  }
+
+  function alertUser(entry) {
+    if (!notificationsOn) return;
+    if (entry && entry.type === 'log') return; // only ping for real webhooks
+    beep();
+    try {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        var product = entry.product || 'webhook';
+        new Notification('New ' + product + ' event', { body: headline(entry) + ' — ' + subline(entry) });
+      } else {
+        document.title = '🔔 New event — Meta Webhooks';
+        setTimeout(function () { document.title = 'Meta Webhooks — Live Dashboard'; }, 3000);
+      }
+    } catch (e) { /* notifications are best-effort */ }
+  }
+
+
+  function streamUrl() {
+    var url = '/dashboard/stream' + (token ? '?token=' + encodeURIComponent(token) : '');
+    return url;
+  }
+
+  function setStatus(live, text) {
+    dot.className = 'dot' + (live ? ' live' : '');
+    statusText.textContent = text;
+  }
+
+  function updateCounts() {
+    document.getElementById('countTotal').textContent = counts.total;
+    document.getElementById('countPages').textContent = counts.pages;
+    document.getElementById('countWhatsapp').textContent = counts.whatsapp;
+    document.getElementById('countInstagram').textContent = counts.instagram;
+  }
+
+  function matches(entry) {
+    var product = entry.product || (entry.type === 'log' ? 'server' : 'unknown');
+    if (productFilter.value !== 'all' && product !== productFilter.value) return false;
+    if (typeFilter.value !== 'all' && entry.type !== typeFilter.value) return false;
+    return true;
+  }
+
+  function beep() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      audioCtx = audioCtx || new Ctx();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.4);
+    } catch (e) { /* audio is best-effort */ }
+  }
+
+  function alertUser(entry) {
+    if (!notificationsOn) return;
+    beep();
+    try {
+      if (!('Notification' in window)) return;
+      if (Notification.permission !== 'granted') return;
+      var product = entry.product || (entry.type === 'log' ? 'server' : 'unknown');
+      new Notification('Meta webhook: ' + product, {
+        body: headline(entry) + (subline(entry) ? '\n' + subline(entry).slice(0, 160) : ''),
+        tag: entry.deliveryHash || String(entry.seq || Date.now()),
+      });
+    } catch (e) { /* notifications are best-effort */ }
+  }
+
+  function headline(entry) {
+    if (entry.type === 'log') return entry.message || entry.level || 'log';
+    if (entry.kind === 'message' || entry.kind === 'messaging') return entry.kind + ' · ' + (entry.messageType || 'text');
+    if (entry.kind === 'status') return 'status · ' + (entry.status || 'unknown');
+    if (entry.kind === 'comment') return 'comment · ' + (entry.commentId || '');
+    if (entry.kind === 'mention') return 'mention';
+    if (entry.kind === 'change') return 'change · ' + (entry.field || '');
+    return entry.kind || entry.message || 'event';
+  }
+
+  function productLabel(product) {
+    if (product === 'pages') return 'Pages';
+    if (product === 'whatsapp') return 'WhatsApp';
+    if (product === 'instagram') return 'Instagram';
+    if (product === 'server') return 'Server';
+    return product || 'webhook';
+  }
+
+  function subline(entry) {
+    var parts = [];
+    if (entry.messageId) parts.push('message ' + entry.messageId);
+    if (entry.commentId) parts.push('comment ' + entry.commentId);
+    if (entry.postId) parts.push('post ' + entry.postId);
+    if (entry.mediaId) parts.push('media ' + entry.mediaId);
+    if (entry.senderId) parts.push('from ' + entry.senderId);
+    if (entry.recipientId) parts.push('to ' + entry.recipientId);
+    if (entry.entryId) parts.push('entry ' + entry.entryId);
+    if (entry.deliveryHash) parts.push('delivery ' + String(entry.deliveryHash).slice(0, 12) + '…');
+    if (entry.content) parts.push('“' + entry.content + '”');
+    if (entry.level) parts.push(entry.level);
+    return parts.join(' · ');
+  }
+
+  // --- Real-time alerts: desktop notification + short beep ------------------
+  function canNotify() {
+    return notificationsOn &&
+      typeof Notification !== 'undefined' &&
+      Notification.permission === 'granted';
+  }
+
+  function beep() {
+    if (!SOUND_ALERTS) return;
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      var ctx = new Ctx();
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.value = 0.05;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.12);
+      setTimeout(function () { try { ctx.close(); } catch (e) {} }, 400);
+    } catch (e) {}
+  }
+
+  function alertUser(entry) {
+    if (!canNotify() || entry.type !== 'webhook') return;
+    var product = entry.product || 'meta';
+    var body = headline(entry) + (subline(entry) ? '\n' + subline(entry) : '');
+    try {
+      var note = new Notification(product + ' webhook', {
+        body: body.slice(0, 200),
+        tag: product + ':' + (entry.messageId || entry.commentId || entry.seq),
+        silent: true,
+      });
+      setTimeout(function () { try { note.close(); } catch (e) {} }, 8000);
+    } catch (e) {}
+    beep();
+    document.title = '(' + counts.total + ') Meta Webhooks — Live';
+  }
+
+  function render(entry) {
+    if (paused || !matches(entry)) return;
+    var product = entry.product || (entry.type === 'log' ? 'server' : 'unknown');
+    var li = document.createElement('li');
+    li.className = 'item ' + product;
+    var time = document.createElement('span');
+    time.className = 'time';
+    try { time.textContent = new Date(entry.time).toLocaleString(); }
+    catch (e) { time.textContent = entry.time || ''; }
+    var meta = document.createElement('div');
+    meta.className = 'meta';
+    var badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = product + (entry.type === 'log' ? ' · log' : '');
+    var head = document.createElement('span');
+    head.className = 'headline';
+    head.textContent = headline(entry);
+    meta.appendChild(badge);
+    meta.appendChild(head);
+    meta.appendChild(time);
+    li.appendChild(meta);
+    var sub = subline(entry);
+    if (sub) {
+      var subEl = document.createElement('div');
+      subEl.className = 'sub';
+      subEl.textContent = sub;
+      li.appendChild(subEl);
+    }
+    var details = document.createElement('details');
+    var summary = document.createElement('summary');
+    summary.textContent = 'raw JSON';
+    var pre = document.createElement('pre');
+    pre.textContent = JSON.stringify(entry, null, 2);
+    details.appendChild(summary);
+    details.appendChild(pre);
+    li.appendChild(details);
+    feed.prepend(li);
+    counts.total += 1;
+    if (counts[product] !== undefined) counts[product] += 1;
+      alertUser(entry);
+    updateCounts();
+    alertUser(entry);
+    while (feed.children.length > 300) feed.removeChild(feed.lastChild);
+  function beep() {
+    try {
+      var Ctor = window.AudioContext || window.webkitAudioContext;
+      if (!Ctor) return;
+      audioCtx = audioCtx || new Ctor();
+      var ctx = audioCtx;
+      if (ctx.state === 'suspended') ctx.resume();
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.4);
+    } catch (e) {}
+  }
+
+  function alertUser(entry) {
+    try {
+      if (document.visibilityState === 'visible') return;
+      if (!notificationsOn || !('Notification' in window)) return;
+      if (Notification.permission !== 'granted') return;
+      var body = subline(entry) || headline(entry);
+      if (body && body.length > 140) body = body.slice(0, 137) + '…';
+      new Notification(productLabel(entry.product) + ' · ' + headline(entry), {
+        body: body || undefined,
+        tag: 'webhook-' + (entry.seq || Date.now()),
+      });
+      beep();
+    } catch (e) {}
+  }
+
+  function connect() {
+    if (source) { try { source.close(); } catch (e) {} }
+    setStatus(false, 'connecting…');
+    source = new EventSource(streamUrl());
+    source.onopen = function () { setStatus(true, 'live'); };
+    source.onerror = function () { setStatus(false, 'reconnecting…'); };
+    source.addEventListener('ready', function () { setStatus(true, 'live'); });
+    source.addEventListener('webhook', function (ev) {
+      try { render(JSON.parse(ev.data)); } catch (e) {}
+    });
+    source.addEventListener('log', function (ev) {
+      try { render(JSON.parse(ev.data)); } catch (e) {}
+    });
+    source.addEventListener('heartbeat', function () { setStatus(true, 'live'); });
+  }
+
+  function loadRecent() {
+    var url = '/dashboard/recent?limit=50' + (token ? '&token=' + encodeURIComponent(token) : '');
+    fetch(url)
+      .then(function (res) {
+        if (res.status === 401 || res.status === 403) {
+          tokenBox.style.display = 'inline-flex';
+          setStatus(false, 'token required');
+          return null;
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (body) {
+        if (!body || !body.events) return;
+        body.events.forEach(render);
+      })
+      .catch(function () { /* SSE stream keeps retrying on its own */ });
+  }
+
+  document.getElementById('tokenSave').addEventListener('click', function () {
+    token = tokenInput.value.trim();
+    if (token) {
+      try { sessionStorage.setItem('dashboardToken', token); } catch (e) {}
+      tokenBox.style.display = 'none';
+      feed.innerHTML = '';
+      counts = { total: 0, pages: 0, whatsapp: 0, instagram: 0 };
+      updateCounts();
+      connect();
+      loadRecent();
+    }
+  });
+  pauseBtn.addEventListener('click', function () {
+    paused = !paused;
+    pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+  });
+  notifyBtn.addEventListener('click', function () {
+    if (!('Notification' in window)) {
+      notifyBtn.textContent = 'Not supported';
+      return;
+    }
+    Notification.requestPermission().then(function (permission) {
+      notificationsOn = permission === 'granted';
+      notifyBtn.textContent = notificationsOn ? 'Alerts on' : 'Enable alerts';
+      if (notificationsOn) beep();
+    }).catch(function () {
+      notifyBtn.textContent = 'Enable alerts';
+    });
+  });
+  clearBtn.addEventListener('click', function () {
+    feed.innerHTML = '';
+    counts = { total: 0, pages: 0, whatsapp: 0, instagram: 0 };
+    updateCounts();
+  });
+  productFilter.addEventListener('change', function () {});
+  typeFilter.addEventListener('change', function () {});
+
+  connect();
+  loadRecent();
+})();
+</script>
+</body>
+</html>
